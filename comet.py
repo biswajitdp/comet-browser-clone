@@ -4,9 +4,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 
-# ===============================
 # CONFIG
-# ===============================
 load_dotenv()
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 TAVILY_URL = "https://api.tavily.com/search"
@@ -16,20 +14,19 @@ st.set_page_config(
     page_icon="🪐",
     layout="centered"
 )
-
-# ===============================
 # FUNCTION
-# ===============================
 def tavily_search(query, max_results=5):
-    """Perform a stable Tavily search and always prioritize the summarized answer."""
-    query = query.strip().lower()  # normalize input for consistency
+    """Safe Tavily search that NEVER crashes Streamlit"""
+    if not TAVILY_API_KEY:
+        st.error("❌ TAVILY_API_KEY is missing")
+        return None
 
     payload = {
         "api_key": TAVILY_API_KEY,
-        "query": query,
+        "query": query.strip(),
         "include_answer": True,
         "include_images": True,
-        "include_raw_content": False,   # avoid noise
+        "include_raw_content": False,
         "max_results": max_results
     }
 
@@ -37,16 +34,30 @@ def tavily_search(query, max_results=5):
         response = requests.post(TAVILY_URL, json=payload, timeout=20)
         response.raise_for_status()
         data = response.json()
-        # Normalize fields
-        data["answer"] = data.get("answer", "").strip()
+
+        # ✅ SAFE normalization
+        answer = data.get("answer")
+
+        if isinstance(answer, str):
+            data["answer"] = answer.strip()
+        else:
+            data["answer"] = ""
+
+        # Ensure results is always a list
+        if not isinstance(data.get("results"), list):
+            data["results"] = []
+
+        # Ensure images is always a list
+        if not isinstance(data.get("images"), list):
+            data["images"] = []
+
         return data
+
     except requests.exceptions.RequestException as e:
-        st.error(f"API Error: {e}")
+        st.error(f"❌ Tavily API Error: {e}")
         return None
 
-# ===============================
 # THEME TOGGLE (TOP, NOT SIDEBAR)
-# ===============================
 if "dark" not in st.session_state:
     st.session_state.dark = True
 
@@ -57,9 +68,7 @@ with col2:
 DARK = st.session_state.dark
 
 
-# ===============================
 # CUSTOM CSS
-# ===============================
 st.markdown(f"""
 <style>
   :root {{
@@ -151,9 +160,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# ===============================
 # HEADER
-# ===============================
 st.markdown(
     """
     <div class="header">
@@ -165,10 +172,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-# ===============================
 # SEARCH INPUT
-# ===============================
 st.markdown("### 🔍 Search")
 query = st.text_input("Enter your query...", placeholder="Type your question here and press Enter")
 search_btn = st.button("Search")
@@ -180,9 +184,7 @@ else:
     data = None
 
 
-# ===============================
 # RESULTS SECTION
-# ===============================
 tab1, tab2, tab3 = st.tabs(["Results", "Sources", "Images"])
 
 # ====== TAB 1: RESULTS ======
